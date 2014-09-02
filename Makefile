@@ -3,7 +3,7 @@
 all: testmem
 
 testmem:
-	cc -Ofast testmem.c -o testmem
+	cc -O testmem.c -o testmem
 test:
 	./testmem auto
 
