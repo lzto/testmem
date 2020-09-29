@@ -2,7 +2,7 @@
 
 all: testmem
 
-CFLAGS=-O2 -march=native -funroll-loops
+CFLAGS=-Ofast -march=native -funroll-loops -Wall -g
 
 testmem:
 	$(CC) testmem.c ${CFLAGS} -o testmem 
@@ -13,3 +13,5 @@ test:
 clean:
 	rm -f testmem *.o
 
+indent:
+	clang-format -i -style=llvm testmem.c

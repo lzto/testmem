@@ -1,208 +1,182 @@
 /*
  * THIS PROGRAM IS DISTRIBUTED UNDER GPLv2
- * testmem
+ * test memory speed
  * 2013-2020 Tong Zhang<ztong0001@gmail.com>
  */
 #include <math.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <unistd.h>
 
-typedef void(*sighandler_t)(int);
+#define likely(x) __builtin_expect((x), 1)
+#define unlikely(x) __builtin_expect((x), 0)
 
-static unsigned int memsize;
-static struct timeval time_r_start;
-static struct timeval time_r_end;
-static struct timeval time_w_start;
-static struct timeval time_w_end;
+typedef void (*sighandler_t)(int);
 
-static double r_peak_perf;
-static double r_average_perf;
-static double w_peak_perf;
-static double w_average_perf;
+size_t memsize;
+struct timeval time_r_start;
+struct timeval time_r_end;
+struct timeval time_w_start;
+struct timeval time_w_end;
 
-static unsigned long cycle_all;
-static unsigned long cycle_inf_w;
-static unsigned long cycle_inf_r;
+double r_peak_perf;
+double r_average_perf;
+double w_peak_perf;
+double w_average_perf;
 
-static char silent;
+unsigned long cycle_all;
+unsigned long cycle_inf_w;
+unsigned long cycle_inf_r;
 
-int work_mem(int val);
+char silent;
 
-void signal_int()
-{
-	printf("\nCaught SIGNAL\n");
-	printf("--------------------------------------\n");
-	printf("Peak\tW\tR\n");
-	printf("    \t%fMB/s\t%fMB/s\n",w_peak_perf,r_peak_perf);
-	printf("Average\tW\tR\n");
-	printf("       \t%fMB/s\t%fMB/s\n",w_average_perf,r_average_perf);
-	printf("Test complete in %ld cycles\n",cycle_all);
-	printf("with write burst inf %ld cycles, %f Percent\n",cycle_inf_w,(double)cycle_inf_w/(double)cycle_all*100.0);
-	printf("with read  burst inf %ld cycles, %f Percent\n",cycle_inf_r,(double)cycle_inf_r/(double)cycle_all*100.0);
-	printf("--------------------------------------\n");
-	exit(0);
+int work_mem(char);
+
+void signal_int(int signo) {
+  printf("\nCaught ^C\n");
+  printf("--------------------------------------\n");
+  printf("Peak\tW\tR\n");
+  printf("    \t%fMB/s\t%fMB/s\n", w_peak_perf, r_peak_perf);
+  printf("Average\tW\tR\n");
+  printf("       \t%fMB/s\t%fMB/s\n", w_average_perf, r_average_perf);
+  printf("Test complete in %ld cycles\n", cycle_all);
+  printf("with write burst inf %ld cycles, %f Percent\n", cycle_inf_w,
+         (double)cycle_inf_w / (double)cycle_all * 100.0);
+  printf("with read  burst inf %ld cycles, %f Percent\n", cycle_inf_r,
+         (double)cycle_inf_r / (double)cycle_all * 100.0);
+  printf("--------------------------------------\n");
+  exit(0);
 }
 
-void usage(char* appname)
-{
-	fprintf(stderr,"%s [auto]|[mem_size in %lu byte] [s]\n",appname,sizeof(int));
+void usage(const char *bin) {
+  printf("%s [auto|size] [s]\n", bin);
+  printf(" auto - automatic increase array size from 0 to inf\n"
+         " size - array size in byte\n"
+         " s - only print final result\n");
+  exit(1);
 }
 
-inline int numbergen()
-{
-	//srandom(time(NULL));
-	//return (int)random();
-	return 0;
+inline int numbergen() {
+  // srandom(time(NULL));
+  // return (int)random();
+  return 0;
 }
 
-int work_freemem()
-{
-	memsize = 1;
-	while(1)
-	{
-		cycle_all++;
-		printf("\nmemsize : %d byte\n",memsize);
-		if(work_mem(numbergen())==0)
-		{
-			memsize*=2;
-		}else
-		{
-			printf("failed at %d byte\n"
-				"revert to liner increasment\n",memsize);
-			memsize/=2;
-			break;
-		}
-	}
-	while(1)
-	{
-		cycle_all++;
-		if(work_mem(numbergen())==0)
-		{
-			memsize+=1024;
-		}else
-		{
-			memsize-=1024;
-		}
-		printf("\nmemsize : %d byte\n",memsize);
-	}
-	return 0;
+int work_freemem() {
+  memsize = 1;
+  while (1) {
+    cycle_all++;
+    printf("\nmemsize : %#lx\n", memsize);
+    if (work_mem(numbergen()) == 0) {
+      memsize *= 2;
+    } else {
+      printf("failed @ %#lx \n"
+             "revert to liner increasment\n",
+             memsize);
+      memsize /= 2;
+      break;
+    }
+  }
+  while (1) {
+    cycle_all++;
+    if (work_mem(numbergen()) == 0) {
+      memsize += 1024;
+    } else {
+      memsize -= 1024;
+    }
+    printf("\nmemsize : %#lx byte\n", memsize);
+  }
+  return 0;
 }
 
-inline int work_mem(int val)
-{
-	double speed;
-	int* buffer = malloc(memsize*sizeof(int));
-	if(buffer==NULL)
-	{
-		return -1;
-	}
-	int i;
-	gettimeofday(&time_w_start,NULL);
-	for(i = 0;i<memsize;i++)
-	{
-		buffer[i] = val;
-	}
+///
+/// val -- some value to fill the array
+///
+inline int work_mem(char val) {
+  char dstbuffer[128];
+  memset(dstbuffer, 0, 128);
+  char *buffer = (char *)malloc(memsize);
+  if (buffer == NULL)
+    return -1;
+  // touch the buffer make sure no lazy initialization
+  for (int i = 0; i < memsize; i++)
+    buffer[i] = 0;
+  // write test
+  gettimeofday(&time_w_start, NULL);
+  for (int i = 0; i < memsize; i++)
+    buffer[i] = val;
+  gettimeofday(&time_w_end, NULL);
+  double wspeed = ((double)memsize / (1024.0 * 1024.0)) /
+                  ((double)(time_w_end.tv_sec - time_w_start.tv_sec) +
+                   (time_w_end.tv_usec - time_w_start.tv_usec) / 1000000.0);
 
-	gettimeofday(&time_w_end,NULL);
+  if (wspeed != INFINITY) {
+    if (wspeed > w_peak_perf)
+      w_peak_perf = wspeed;
+    w_average_perf = (w_average_perf + wspeed) / 2.0;
+  } else {
+    cycle_inf_w++;
+  }
+  if (!silent)
+    printf("\rw = %f MB/s", wspeed);
 
-	speed = ((double)memsize/(1024.0*1024.0))/
-				((double)(time_w_end.tv_sec - time_w_start.tv_sec)+
-				 (time_w_end.tv_usec-time_w_start.tv_usec)/1000000.0);
+  // read test
+  gettimeofday(&time_r_start, NULL);
+  for (int i = 0; i < memsize; i++)
+    if (unlikely(buffer[i] != val))
+      goto fail;
+  gettimeofday(&time_r_end, NULL);
 
-	if(speed!=INFINITY)
-	{
-		if(speed>w_peak_perf)
-		{
-			w_peak_perf = speed;
-		}
-		w_average_perf = ( w_average_perf + speed )/2.0;
-	}else
-	{
-		cycle_inf_w++;
-	}
-	if(!silent)
-		printf("\rw = %f MB/s",speed);
+  double rspeed = ((double)memsize / (1024.0 * 1024.0)) /
+                  ((double)(time_r_end.tv_sec - time_r_start.tv_sec) +
+                   (time_r_end.tv_usec - time_r_start.tv_usec) / 1000000.0);
+  if (rspeed != INFINITY) {
+    if (rspeed > r_peak_perf)
+      r_peak_perf = rspeed;
+    r_average_perf = (r_average_perf + rspeed) / 2.0;
+  } else {
+    cycle_inf_r++;
+  }
+  if (!silent)
+    printf(" r = %f MB/s", rspeed);
 
-	//sleep(5);
-	gettimeofday(&time_r_start,NULL);
-	for(i = 0;i<memsize;i++)
-	{
-		if(buffer[i]!=val)
-		{
-			fprintf(stderr,"FATAL at %d\n",i);
-			free(buffer);
-			return -1;
-		}
-	}
-	gettimeofday(&time_r_end,NULL);
-
-	speed = ((double)memsize/(1024.0*1024.0))/
-			((double)(time_r_end.tv_sec - time_r_start.tv_sec)+
-			 (time_r_end.tv_usec-time_r_start.tv_usec)/1000000.0);
-	if(speed!=INFINITY)
-	{
-		if(speed>r_peak_perf)
-		{
-			r_peak_perf = speed;
-		}
-		r_average_perf = ( r_average_perf + speed )/2.0;
-	}else
-	{
-		cycle_inf_r++;
-	}
-	if(!silent)
-		printf(" r = %f MB/s",speed);
-
-	free(buffer);
-	return 0;
+  free(buffer);
+  return 0;
+fail:
+  free(buffer);
+  return -1;
 }
 
-int main(int argc,char** argv)
-{
-	int x = 0;
-	if(argc<2)
-	{
-		usage(argv[0]);
-		return 0;
-	}
-	signal(SIGINT,(sighandler_t)signal_int);
-	memsize = atoi(argv[1]);
-	if(argc>=3)
-	{
-		if(strcmp("s",argv[2])==0)
-		{
-			silent = 1;
-		}
-	}
+int main(int argc, char **argv) {
+  if (argc < 2)
+    usage(argv[0]);
+  signal(SIGINT, signal_int);
+  memsize = atoi(argv[1]);
+  if (argc >= 3) {
+    if (strcmp("s", argv[2]) == 0) {
+      silent = 1;
+    }
+  }
 
-	if(strcmp("auto",argv[1])==0)
-	{
-		memsize = 1;
-		printf("testing mem auto size\n");
-		work_freemem();
-	}else if(memsize!=0)
-	{
-		printf("testing mem size: %lu Byte\n",memsize*sizeof(int));
-		while(1)
-		{
-			cycle_all++;
-			if(work_mem(x++)==0)
-			{
-				//fprintf(stdout,"mem test passed\n");
-			}else
-			{
-				fprintf(stderr,"fatal\n");
-				exit(-1);
-			}
-	//		sleep(1);
-		}
-	}
-	usage(argv[0]);
-	return 0;
+  if (strcmp("auto", argv[1]) == 0) {
+    memsize = 1;
+    printf("testing mem auto size\n");
+    work_freemem();
+  } else if (memsize != 0) {
+    printf("testing mem size: %lu Byte\n", memsize);
+    int x = 0;
+    while (1) {
+      cycle_all++;
+      if (work_mem(x++)) {
+        fprintf(stderr, "fatal error\n");
+        exit(-1);
+      }
+    }
+  }
+  usage(argv[0]);
+  return 1;
 }
-
