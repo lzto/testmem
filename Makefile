@@ -2,8 +2,10 @@
 
 all: testmem
 
+CFLAGS=-O2 -march=native -funroll-loops
+
 testmem:
-	cc -Ofast testmem.c -o testmem
+	$(CC) testmem.c ${CFLAGS} -o testmem 
 test:
 	./testmem auto
 

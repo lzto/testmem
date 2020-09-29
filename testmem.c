@@ -1,7 +1,7 @@
 /*
  * THIS PROGRAM IS DISTRIBUTED UNDER GPLv2
  * testmem
- * 2013-2014 by lovewilliam <lovewilliam@gmail.com>
+ * 2013-2020 Tong Zhang<ztong0001@gmail.com>
  */
 #include <math.h>
 #include <unistd.h>
