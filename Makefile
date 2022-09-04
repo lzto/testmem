@@ -2,7 +2,7 @@
 
 all: testmem
 
-CFLAGS=-Ofast -march=native -funroll-loops -Wall -g
+CFLAGS=-Ofast -march=native -funroll-loops -Wall -g -Werror -Wextra
 
 testmem:
 	$(CC) testmem.c ${CFLAGS} -o testmem 

@@ -1,7 +1,7 @@
 /*
  * THIS PROGRAM IS DISTRIBUTED UNDER GPLv2
  * test memory speed
- * 2013-2020 Tong Zhang<ztong0001@gmail.com>
+ * 2013-2022 Tong Zhang<ztong0001@gmail.com>
  */
 #include <math.h>
 #include <signal.h>
@@ -37,7 +37,7 @@ char silent;
 int work_mem(char);
 
 void signal_int(int signo) {
-  printf("\nCaught ^C\n");
+  printf("\nCaught signal %d\n", signo);
   printf("--------------------------------------\n");
   printf("Peak\tW\tR\n");
   printf("    \t%fMB/s\t%fMB/s\n", w_peak_perf, r_peak_perf);
@@ -70,11 +70,11 @@ int work_freemem() {
   memsize = 1;
   while (1) {
     cycle_all++;
-    printf("\nmemsize : %#lx\n", memsize);
+    printf("\nmemsize : %zu\n", memsize);
     if (work_mem(numbergen()) == 0) {
       memsize *= 2;
     } else {
-      printf("failed @ %#lx \n"
+      printf("failed @ %zu \n"
              "revert to liner increasment\n",
              memsize);
       memsize /= 2;
@@ -88,7 +88,7 @@ int work_freemem() {
     } else {
       memsize -= 1024;
     }
-    printf("\nmemsize : %#lx byte\n", memsize);
+    printf("\nmemsize : %zu byte\n", memsize);
   }
   return 0;
 }
@@ -98,16 +98,17 @@ int work_freemem() {
 ///
 inline int work_mem(char val) {
   char dstbuffer[128];
+  size_t i;
   memset(dstbuffer, 0, 128);
   char *buffer = (char *)malloc(memsize);
   if (buffer == NULL)
     return -1;
   // touch the buffer make sure no lazy initialization
-  for (int i = 0; i < memsize; i++)
+  for (i = 0; i < memsize; i++)
     buffer[i] = 0;
   // write test
   gettimeofday(&time_w_start, NULL);
-  for (int i = 0; i < memsize; i++)
+  for (i = 0; i < memsize; i++)
     buffer[i] = val;
   gettimeofday(&time_w_end, NULL);
   double wspeed = ((double)memsize / (1024.0 * 1024.0)) /
@@ -126,7 +127,7 @@ inline int work_mem(char val) {
 
   // read test
   gettimeofday(&time_r_start, NULL);
-  for (int i = 0; i < memsize; i++)
+  for (i = 0; i < memsize; i++)
     if (unlikely(buffer[i] != val))
       goto fail;
   gettimeofday(&time_r_end, NULL);
@@ -167,7 +168,7 @@ int main(int argc, char **argv) {
     printf("testing mem auto size\n");
     work_freemem();
   } else if (memsize != 0) {
-    printf("testing mem size: %lu Byte\n", memsize);
+    printf("testing mem size: %zu Byte\n", memsize);
     int x = 0;
     while (1) {
       cycle_all++;
